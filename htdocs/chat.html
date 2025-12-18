@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataPadi-Package Order</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #FFD700; /* Default to MTN’s yellow */
+      --error: #ff4444;
+      --success: #00c851;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background-image: url('image/mtn-bg.jpg');
+      min-height: 100vh;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Operator Selector Bar */
+    .operator-bar {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      background: #e9ecefe4;
+      padding: 0.75rem 1rem;
+      border-radius: 50px;
+      width: 100%;
+      max-width: 800px;
+      margin-bottom: 1.5rem;
+    }
+
+    .operator-btn {
+      border: none;
+      background: transparent;
+      padding: 0.5rem 1rem;
+      font-weight: 600;
+      color: #495057;
+      cursor: pointer;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    .operator-btn.active {
+      background: var(--primary);
+      color: white;
+      border-radius: 20px;
+    }
+
+    /* Main Container */
+    .container {
+      background: white;
+      border-radius: 1.5rem;
+      box-shadow: 0 1rem 3rem rgba(0,0,0,0.1);
+      padding: 2.5rem;
+      max-width: 700px;
+      width: 100%;
+    }
+
+    .main-title {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: var(--primary);
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    /* Step Section Styles */
+    .step-section {
+      margin-bottom: 2rem;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .step-icon {
+      margin-right: 0.5rem;
+    }
+
+    .step-icon .circle {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: white;
+      text-align: center;
+      line-height: 30px;
+      font-weight: 600;
+    }
+
+    .step-header h2 {
+      font-size: 0.9rem;
+      color: #343a40;
+    }
+
+    /* Input & Selector Styles */
+    .input-group,
+    .quantity-selector,
+    .package-selector {
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    /* Icon placement for input fields */
+    .input-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #495057;
+      font-size: 1.1rem;
+    }
+
+    .phone-input,
+    .quantity-input,
+    .selected-package {
+      width: 100%;
+      padding: 0.7rem 0.7rem 0.7rem 2.8rem; /* extra left padding for icon */
+      border: 2px solid #e9ecef;
+      border-radius: 0.75rem;
+      font-size: 0.7rem;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .phone-input:focus,
+    .quantity-input:focus,
+    .selected-package:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+
+    .error-message {
+      color: var(--error);
+      font-size: 0.8em;
+      margin-top: 0.5rem;
+      display: none;
+    }
+
+    .package-selector {
+      cursor: pointer;
+    }
+
+    .selected-package {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-right: 1rem;
+    }
+
+    .package-options {
+      position: absolute;
+      width: 100%;
+      background: white;
+      border: 2px solid #e9ecef;
+      border-radius: 0.75rem;
+      margin-top: 0.5rem;
+      max-height: 220px; /* Allows for five options with scrolling if more */
+      overflow-y: auto;
+      transition: max-height 0.3s ease;
+      z-index: 10;
+    }
+
+    .package-option {
+      padding: 1rem;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .package-option:hover {
+      background: #f1f3f5;
+    }
+
+    /* Summary & Price */
+    .price-display {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #212529;
+      text-align: center;
+      margin-bottom: 1rem;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .price-display.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .summary {
+      background: #f8f9ff;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    .summary.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    /* Payment Button */
+    .pay-button {
+      width: 100%;
+      padding: 1.25rem;
+      border: none;
+      border-radius: 0.75rem;
+      background: var(--primary);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.3s ease;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .pay-button:hover {
+      transform: scale(1.02);
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 1.5rem;
+      }
+      .operator-bar {
+        flex-direction: row;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Operator Selector Bar -->
+  <header class="operator-bar">
+    <button class="operator-btn active" data-operator="MTN" data-color="#FFD700" data-bg="image/mtn-bg.jpg">MTN Ghana</button>
+    <button class="operator-btn" data-operator="AirtelTigo" data-color="#0066ff" data-bg="image/tigo-bg.jpg">AirtelTigo</button>
+    <button class="operator-btn" data-operator="Telecel" data-color="#ff4444" data-bg="image/tel-bg.jpg">Telecel Ghana</button>
+  </header>
+
+  <!-- Main Purchase Container -->
+  <div class="container">
+    <h1 class="main-title">Purchase Your Data Bundle in 5 Simple Steps</h1>
+
+    <!-- Step 1: Mobile Number -->
+    <section class="step-section" id="step-1">
+      <div class="step-header">
+        <div class="step-icon">
+          <span class="circle">1</span>
+        </div>
+        <h2>Enter your 10‑digit mobile number (include the leading 0)</h2>
+      </div>
+      <div class="input-group">
+        <div class="input-icon">
+          <i class="fas fa-phone"></i>
+        </div>
+        <input type="tel" class="phone-input" placeholder="024 123 4567" maxlength="10">
+        <div class="error-message" id="number-error"></div>
+      </div>
+    </section>
+
+    <!-- Step 2: Data Package -->
+    <section class="step-section" id="step-2">
+      <div class="step-header">
+        <div class="step-icon">
+          <span class="circle">2</span>
+        </div>
+        <h2>Select your data bundle from the list below.</h2>
+      </div>
+      <div class="package-selector">
+        <div class="selected-package" onclick="togglePackageOptions()">
+          <i class="fas fa-box-open input-icon" style="margin-right: 0.5rem;"></i>
+          <span>Select package</span>
+          <i class="fas fa-chevron-down"></i>
+        </div>
+        <div class="package-options">
+          <!-- Options will be loaded dynamically based on operator -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: Quantity -->
+    <section class="step-section" id="step-3">
+      <div class="step-header">
+        <div class="step-icon">
+          <span class="circle">3</span>
+        </div>
+        <h2>Enter the number of packages you want to purchase.</h2>
+      </div>
+      <div class="quantity-selector">
+        <div class="input-icon">
+          <i class="fas fa-sort-numeric-up"></i>
+        </div>
+        <input type="number" class="quantity-input" min="0" value="0">
+        <div class="error-message" id="quantity-error"></div>
+      </div>
+    </section>
+
+    <!-- Step 4: Summary -->
+    <section class="step-section" id="step-4">
+      <div class="step-header">
+        <div class="step-icon">
+          <span class="circle">4</span>
+        </div>
+        <h2>Review your selections and total cost.</h2>
+      </div>
+      <div class="price-display">
+        Total: GHS <span id="total-price">0.00</span>
+      </div>
+      <div class="summary">
+        <div class="summary-item">
+          <span>Mobile Number:</span>
+          <span id="summary-number">--</span>
+        </div>
+        <div class="summary-item">
+          <span>Package:</span>
+          <span id="summary-package">--</span>
+        </div>
+        <div class="summary-item">
+          <span>Quantity:</span>
+          <span id="summary-quantity">--</span>
+        </div>
+        <div class="summary-item">
+          <span>Total Price:</span>
+          <span>GHS <span id="summary-total">0.00</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 5: Payment -->
+    <section class="step-section" id="step-5">
+      <div class="step-header">
+        <div class="step-icon">
+          <span class="circle">5</span>
+        </div>
+        <h2>Proceed to payment to complete your purchase.</h2>
+      </div>
+      <button class="pay-button">
+        <i class="fas fa-lock"></i>
+        Proceed to Payment
+      </button>
+    </section>
+  </div>
+
+  <script>
+    // Operators and validation config
+    const operators = {
+      mtn: ['024', '025', '053', '054', '055', '059'],
+      airteltigo: ['026', '027', '056', '057'],
+      telecel: ['020', '050']
+    };
+
+    // Package lists for each operator
+    const packages = {
+      mtn: [
+        { size: "1 GB", price: 5 },
+        { size: "2 GB", price: 9 },
+        { size: "3 GB", price: 12 },
+        { size: "5 GB", price: 18 },
+        { size: "10 GB", price: 30 },
+        { size: "1 GB", price: 5 },
+        { size: "2 GB", price: 9 },
+        { size: "3 GB", price: 12 },
+        { size: "5 GB", price: 18 },
+        { size: "10 GB", price: 30 },
+        { size: "1 GB", price: 5 },
+        { size: "2 GB", price: 9 },
+        { size: "3 GB", price: 12 },
+        { size: "5 GB", price: 18 },
+        { size: "10 GB", price: 30 }
+      ],
+      airteltigo: [
+        { size: "1 GB", price: 4.5 },
+        { size: "2 GB", price: 8.5 },
+        { size: "3 GB", price: 11.5 },
+        { size: "5 GB", price: 16 },
+        { size: "10 GB", price: 28 }
+      ],
+      telecel: [
+        { size: "1 GB", price: 6 },
+        { size: "2 GB", price: 10 },
+        { size: "3 GB", price: 13 },
+        { size: "5 GB", price: 20 },
+        { size: "10 GB", price: 35 }
+      ]
+    };
+
+    let currentOperator = 'mtn';
+    let selectedPackage = null;
+    let quantity = 0;
+
+    // DOM Elements
+    const phoneInput = document.querySelector('.phone-input');
+    const quantityInput = document.querySelector('.quantity-input');
+    const packageOptions = document.querySelector('.package-options');
+    const priceDisplay = document.querySelector('.price-display');
+    const summary = document.querySelector('.summary');
+    const numberError = document.querySelector('#number-error');
+
+    // Operator bar logic
+    const operatorButtons = document.querySelectorAll('.operator-btn');
+    operatorButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    // Remove 'active' class from all buttons
+    operatorButtons.forEach(b => b.classList.remove('active'));
+    
+    // Add 'active' class to the clicked button
+    btn.classList.add('active');
+    
+    // Get selected operator, color, and background
+    let selectedColor = btn.dataset.color;
+    let selectedBg = btn.dataset.bg;
+
+    // Apply color theme dynamically
+    document.documentElement.style.setProperty('--primary', selectedColor);
+
+    // Apply background image to the container (or body)
+    document.body.style.backgroundImage = `url(${selectedBg})`;
+
+    // Update other UI elements
+    validatePhoneNumber();
+    updateSummary();
+    updatePackageOptions();
+  });
+});
+    // Input listeners
+    phoneInput.addEventListener('input', function() {
+      this.value = this.value.replace(/\D/g, '');
+      validatePhoneNumber();
+      updateSummary();
+    });
+
+    quantityInput.addEventListener('input', function() {
+      quantity = Math.max(0, parseInt(this.value) || 0);
+      this.value = quantity;
+      updatePrice();
+      updateSummary();
+    });
+
+    // Toggle the dropdown for data package selection
+    function togglePackageOptions() {
+      if (packageOptions.style.maxHeight && packageOptions.style.maxHeight !== "0px") {
+        packageOptions.style.maxHeight = "0px";
+      } else {
+        packageOptions.style.maxHeight = packageOptions.scrollHeight + 'px';
+      }
+    }
+
+    // Validate the mobile number based on operator prefixes
+    function validatePhoneNumber() {
+      const number = phoneInput.value;
+      const isValid = number.length === 10 &&
+                      number.startsWith('0') &&
+                      operators[currentOperator].includes(number.substring(0, 3));
+      if (number && !isValid) {
+        numberError.textContent = `Please enter a valid 10-digit ${currentOperator} number`;
+        numberError.style.display = 'block';
+        phoneInput.style.borderColor = 'var(--error)';
+      } else {
+        numberError.style.display = 'none';
+        phoneInput.style.borderColor = isValid ? 'var(--success)' : '#e9ecef';
+      }
+      return isValid;
+    }
+
+    // Update total price dynamically
+    function updatePrice() {
+      if (selectedPackage) {
+        const total = (selectedPackage.price * quantity).toFixed(2);
+        document.getElementById('total-price').textContent = total;
+        priceDisplay.classList.add('visible');
+      }
+    }
+
+    // Update the purchase summary
+    function updateSummary() {
+      const isValid = validatePhoneNumber() && selectedPackage && quantity > 0;
+      summary.classList.toggle('visible', isValid);
+      if (isValid) {
+        document.getElementById('summary-number').textContent = phoneInput.value;
+        document.getElementById('summary-package').textContent = selectedPackage.size;
+        document.getElementById('summary-quantity').textContent = quantity;
+        document.getElementById('summary-total').textContent = (selectedPackage.price * quantity).toFixed(2);
+      }
+    }
+
+    // Dynamically update package options based on the current operator
+    function updatePackageOptions() {
+      selectedPackage = null;
+      document.querySelector('.selected-package span').textContent = "Select package";
+      packageOptions.innerHTML = "";
+      packages[currentOperator].forEach(pkg => {
+        const option = document.createElement('div');
+        option.className = "package-option";
+        option.dataset.price = pkg.price;
+        option.dataset.size = pkg.size;
+        option.textContent = `${pkg.size} - GHS ${pkg.price}${Number(pkg.price) % 1 !== 0 ? "" : ".00"}`;
+        option.addEventListener('click', () => {
+          selectedPackage = { price: parseFloat(pkg.price), size: pkg.size };
+          document.querySelector('.selected-package span').textContent = `${pkg.size} - GHS ${pkg.price}${Number(pkg.price) % 1 !== 0 ? "" : ".00"}`;
+          packageOptions.style.maxHeight = "0px";
+          updatePrice();
+          updateSummary();
+        });
+        packageOptions.appendChild(option);
+      });
+      // Reset dropdown height
+      packageOptions.style.maxHeight = "0px";
+    }
+
+    // Initialize package options on page load
+    updatePackageOptions();
+  </script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<?php
+session_start();
+require_once '../config/database.php';
+
+// Simple auth check
+if (!isset($_SESSION['admin_logged_in'])) {
+    header('Location: login.php');
+    exit;
+}
+
+$db = new Database();
+
+// Get all pending orders
+$stmt = $db->prepare("
+    SELECT o.*, 
+           TIMESTAMPDIFF(MINUTE, o.created_at, NOW()) as age_minutes,
+           pp_manual.cost_price as manual_cost,
+           (o.selling_price - pp_manual.cost_price) as potential_profit
+    FROM orders o
+    LEFT JOIN provider_pricing pp_manual 
+        ON pp_manual.provider = 'manual' 
+        AND pp_manual.network = o.network 
+        AND pp_manual.package_size = o.package_size
+    WHERE o.status = 'pending'
+    ORDER BY o.created_at ASC
+");
+$stmt->execute();
+$pendingOrders = $stmt->fetchAll();
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pending Orders - Manual Processing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #4CAF50;
+            color: white;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 2px;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: black;
+        }
+        .age-urgent {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .age-warning {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .age-ok {
+            color: #28a745;
+        }
+        .profit {
+            font-weight: bold;
+            color: #28a745;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .badge-pending {
+            background: #ffc107;
+            color: #000;
+        }
+        .api-status {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .api-configured {
+            color: #28a745;
+        }
+        .api-not-configured {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Pending Orders - Manual Processing</h1>
+        
+        <?php
+        // Check API status
+        $stmt = $db->prepare("SELECT setting_value FROM admin_settings WHERE setting_key = 'datapacks_api_token'");
+        $stmt->execute();
+        $apiToken = $stmt->fetchColumn();
+        $apiConfigured = !empty($apiToken) && $apiToken !== 'YOUR_API_TOKEN_HERE';
+        ?>
+        
+        <div class="api-status">
+            <?php if ($apiConfigured): ?>
+                <span class="api-configured">✅ API Configured - Orders will auto-process after 10 minutes</span>
+            <?php else: ?>
+                <span class="api-not-configured">⚠️ API Not Configured - All orders require manual processing</span>
+            <?php endif; ?>
+        </div>
+        
+        <?php if (!$apiConfigured): ?>
+        <div class="alert alert-warning">
+            <strong>🔔 API Not Yet Approved</strong><br>
+            All orders must be processed manually until API is configured.<br>
+            Once approved, simply update the API token in settings and orders will auto-process after 10 minutes.
+        </div>
+        <?php endif; ?>
+        
+        <?php if (count($pendingOrders) > 0): ?>
+        <div class="alert alert-info">
+            You have <strong><?= count($pendingOrders) ?></strong> pending orders to process.
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Customer</th>
+                    <th>Network</th>
+                    <th>Package</th>
+                    <th>Age</th>
+                    <th>Profit</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($pendingOrders as $order): ?>
+                <?php
+                    $ageClass = 'age-ok';
+                    if ($order['age_minutes'] > 15) $ageClass = 'age-urgent';
+                    elseif ($order['age_minutes'] > 10) $ageClass = 'age-warning';
+                ?>
+                <tr>
+                    <td><strong><?= htmlspecialchars($order['order_id']) ?></strong></td>
+                    <td><?= htmlspecialchars($order['customer_phone']) ?></td>
+                    <td><?= htmlspecialchars(strtoupper($order['network'])) ?></td>
+                    <td><?= htmlspecialchars($order['package_size']) ?></td>
+                    <td class="<?= $ageClass ?>"><?= $order['age_minutes'] ?> min</td>
+                    <td class="profit">GHS <?= number_format($order['potential_profit'], 2) ?></td>
+                    <td>
+                        <button class="btn btn-success" onclick="markProcessed('<?= $order['order_id'] ?>')">
+                            ✓ Mark as Processed
+                        </button>
+                        <button class="btn btn-primary" onclick="viewDetails('<?= $order['order_id'] ?>')">
+                            View Details
+                        </button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php else: ?>
+        <div class="alert alert-info">
+            🎉 No pending orders! All orders have been processed.
+        </div>
+        <?php endif; ?>
+        
+        <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 5px;">
+            <h3>📝 How to Process Orders Manually:</h3>
+            <ol>
+                <li>Go to your cheaper provider's website</li>
+                <li>Purchase the data package for the customer's number</li>
+                <li>Click "Mark as Processed" once completed</li>
+                <li>The higher profit will be automatically calculated</li>
+            </ol>
+            
+            <?php if (!$apiConfigured): ?>
+            <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 5px;">
+                <strong>🔄 When API is Approved:</strong>
+                <ol>
+                    <li>Get your API token from Datapacks</li>
+                    <li>Go to <a href="settings.php">Settings</a></li>
+                    <li>Update the API token</li>
+                    <li>Orders will then auto-process after 10 minutes if not handled manually</li>
+                </ol>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    
+    <script>
+        function markProcessed(orderId) {
+            if (!confirm('Have you completed this order on the provider website?')) {
+                return;
+            }
+            
+            fetch('/api/admin/mark-completed.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({order_id: orderId})
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert('✅ Order marked as completed!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error.message);
+            });
+        }
+        
+        function viewDetails(orderId) {
+            window.open('/check-order.php?id=' + orderId, '_blank');
+        }
+        
+        // Auto-refresh every 30 seconds
+        setTimeout(() => location.reload(), 30000);
+    </script>
+</body>
+</html>

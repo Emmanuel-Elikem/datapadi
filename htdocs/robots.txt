@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /cron/
+Disallow: /services/
+Disallow: /includes/
+Allow: /image/
+Sitemap: /sitemap.xml

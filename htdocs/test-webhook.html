@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Make.com Webhook</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        input {
+            padding: 8px;
+            width: 100%;
+            max-width: 500px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Make.com Integration Test</h1>
+    
+    <div class="test-section">
+        <h2>Setup: Enter Your Make.com Webhook URL</h2>
+        <div class="input-group">
+            <label>Webhook URL (starts with https://hook.eu2.make.com/):</label><br>
+            <input type="text" id="webhookUrl" placeholder="https://hook.eu2.make.com/YOUR_UNIQUE_STRING" style="width: 100%;">
+            <br><small>Get this from your Make.com scenario webhook module</small>
+        </div>
+        <button onclick="saveWebhookUrl()">Save URL</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>1. Test New Order (Should Wait 10 min)</h2>
+        <button onclick="testNewOrder()">Send New Order</button>
+        <pre id="newOrderResult"></pre>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. Test Old Order (Should Process Immediately)</h2>
+        <button onclick="testOldOrder()">Send Old Order</button>
+        <pre id="oldOrderResult"></pre>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Test with Real Order</h2>
+        <button onclick="createAndTestOrder()">Create Real Order & Send to Make</button>
+        <pre id="realOrderResult"></pre>
+    </div>
+
+    <script>
+        // Load saved webhook URL
+        let WEBHOOK_URL = localStorage.getItem('makeWebhookUrl') || '';
+        if (WEBHOOK_URL) {
+            document.getElementById('webhookUrl').value = WEBHOOK_URL;
+        }
+        
+        function saveWebhookUrl() {
+            const url = document.getElementById('webhookUrl').value.trim();
+            if (!url.startsWith('https://hook.eu2.make.com/')) {
+                alert('Invalid URL! Must start with https://hook.eu2.make.com/');
+                return;
+            }
+            WEBHOOK_URL = url;
+            localStorage.setItem('makeWebhookUrl', url);
+            alert('Webhook URL saved!');
+        }
+        
+        async function testNewOrder() {
+            if (!WEBHOOK_URL) {
+                alert('Please enter and save your Make.com webhook URL first!');
+                return;
+            }
+            
+            const data = {
+                order_id: 'TEST-NEW-' + Date.now(),
+                created_at: new Date().toISOString(),
+                network: 'mtn',
+                package_size: '1 GB',
+                phone: '0241234567',
+                customer_email: 'test@example.com'
+            };
+            
+            document.getElementById('newOrderResult').textContent = 'Sending to: ' + WEBHOOK_URL + '\n\nPlease wait...';
+            
+            try {
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.text();
+                document.getElementById('newOrderResult').textContent = 
+                    'Webhook URL: ' + WEBHOOK_URL + '\n\n' +
+                    'Status: ' + response.status + '\n\n' +
+                    'Sent: ' + JSON.stringify(data, null, 2) + '\n\n' +
+                    'Response: ' + result + '\n\n' +
+                    '✅ Check your Make.com scenario execution history!';
+            } catch (error) {
+                document.getElementById('newOrderResult').textContent = 
+                    '❌ Error: ' + error.message + '\n\n' +
+                    'This usually means:\n' +
+                    '1. Wrong webhook URL\n' +
+                    '2. CORS issue (normal for direct browser requests)\n\n' +
+                    'Try the PHP test below instead!';
+            }
+        }
+        
+        async function testOldOrder() {
+            if (!WEBHOOK_URL) {
+                alert('Please enter and save your Make.com webhook URL first!');
+                return;
+            }
+            
+            // Create timestamp 15 minutes ago
+            const oldTime = new Date(Date.now() - 15 * 60000).toISOString();
+            
+            const data = {
+                order_id: 'TEST-OLD-' + Date.now(),
+                created_at: oldTime,
+                network: 'mtn',
+                package_size: '1 GB',
+                phone: '0241234567',
+                customer_email: 'test@example.com'
+            };
+            
+            document.getElementById('oldOrderResult').textContent = 'Sending to: ' + WEBHOOK_URL + '\n\nPlease wait...';
+            
+            try {
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.text();
+                document.getElementById('oldOrderResult').textContent = 
+                    'Status: ' + response.status + '\n\n' +
+                    'Sent (15 min old order): ' + JSON.stringify(data, null, 2) + '\n\n' +
+                    'Response: ' + result;
+            } catch (error) {
+                document.getElementById('oldOrderResult').textContent = 
+                    '❌ Error: ' + error.message + '\n\n' +
+                    'This is likely a CORS issue. Use the PHP test instead!';
+            }
+        }
+        
+        async function createAndTestOrder() {
+            if (!WEBHOOK_URL) {
+                alert('Please enter and save your Make.com webhook URL first!');
+                return;
+            }
+            
+            document.getElementById('realOrderResult').textContent = 'Creating real order in database...';
+            
+            // First, create a real order
+            const orderData = {
+                network: 'mtn',
+                package_size: '1 GB',
+                selling_price: 5.90,
+                quantity: 1,
+                phone: '0241234567',
+                email: 'test@example.com',
+                payment_ref: 'TEST-MAKE-' + Date.now(),
+                device_fingerprint: 'test-device'
+            };
+            
+            try {
+                // Create order
+                const orderResponse = await fetch('/api/process-order.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(orderData)
+                });
+                
+                const orderResult = await orderResponse.json();
+                
+                if (orderResult.success) {
+                    document.getElementById('realOrderResult').textContent = 
+                        '✅ Order Created!\n' +
+                        'Order ID: ' + orderResult.order_id + '\n\n' +
+                        'The order should have triggered Make.com automatically.\n' +
+                        'Check your Make.com execution history!\n\n' +
+                        'Full Response: ' + JSON.stringify(orderResult, null, 2);
+                } else {
+                    document.getElementById('realOrderResult').textContent = 
+                        '❌ Failed to create order: ' + JSON.stringify(orderResult, null, 2);
+                }
+            } catch (error) {
+                document.getElementById('realOrderResult').textContent = 
+                    '❌ Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

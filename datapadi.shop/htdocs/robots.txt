@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /cron/
+Disallow: /config/
+Disallow: /includes/
+Disallow: /services/
+Disallow: /cron_logs/
+Allow: /image/
+
+Sitemap: https://datapadi.shop/sitemap.xml
