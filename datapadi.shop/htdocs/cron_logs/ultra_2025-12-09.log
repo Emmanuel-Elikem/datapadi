@@ -1,0 +1,4 @@
+[16:31:41] Processing: ORD-20251209-9F2331 - 0596067127 - 2 GB
+[16:31:41] API Response (200): {"success":true,"results":[{"success":true,"ref":"API-1111531","status":"processing","transaction_code":"txn_69384eeee86cf","charged":8.6,"role":"dealer","mode":"api"}],"role":"dealer"}
+[16:31:41] SUCCESS - Ref: API-1111531
+[16:31:51] No pending orders

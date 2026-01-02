@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Complete Flow Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-box {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .result {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Complete Order Flow Test</h1>
+    
+    <div class="test-box">
+        <h2>Step 1: Create Test Order</h2>
+        <button onclick="createOrder()">Create New Order</button>
+        <div id="orderResult" class="result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>Step 2: Manual Processing Window</h2>
+        <div class="timer" id="timer">Waiting for order...</div>
+        <button onclick="processManually()" id="manualBtn" disabled>Process Manually (Admin)</button>
+        <div id="manualResult" class="result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>Step 3: Check Order Status</h2>
+        <button onclick="checkStatus()" id="statusBtn" disabled>Check Status</button>
+        <div id="statusResult" class="result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>Step 4: Force Automatic Processing</h2>
+        <button onclick="forceAutoProcess()" id="autoBtn" disabled>Force Auto Process (Test)</button>
+        <div id="autoResult" class="result"></div>
+    </div>
+
+    <script>
+        let currentOrderId = null;
+        let timerInterval = null;
+        let startTime = null;
+        
+        async function createOrder() {
+            const orderData = {
+                network: 'mtn',
+                package_size: '1 GB',
+                selling_price: 5.90,
+                quantity: 1,
+                phone: '0241234567',
+                email: 'test@example.com',
+                payment_ref: 'TEST-' + Date.now(),
+                device_fingerprint: 'test-device-' + Date.now()
+            };
+            
+            try {
+                const response = await fetch('/api/process-order.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentOrderId = result.order_id;
+                    document.getElementById('orderResult').textContent = 
+                        'Order created successfully!\n' +
+                        'Order ID: ' + result.order_id + '\n' +
+                        'Status: PENDING\n\n' +
+                        'You have 10 minutes to process manually for higher profit!';
+                    
+                    // Enable buttons
+                    document.getElementById('manualBtn').disabled = false;
+                    document.getElementById('statusBtn').disabled = false;
+                    document.getElementById('autoBtn').disabled = false;
+                    
+                    // Start timer
+                    startTimer();
+                } else {
+                    document.getElementById('orderResult').textContent = 
+                        'Error: ' + result.message;
+                }
+            } catch (error) {
+                document.getElementById('orderResult').textContent = 
+                    'Error: ' + error.message;
+            }
+        }
+        
+        function startTimer() {
+            startTime = Date.now();
+            if (timerInterval) clearInterval(timerInterval);
+            
+            timerInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const remaining = 600000 - elapsed; // 10 minutes in ms
+                
+                if (remaining <= 0) {
+                    document.getElementById('timer').textContent = 
+                        'Manual window expired! Order should auto-process soon.';
+                    document.getElementById('timer').style.color = '#f44336';
+                    clearInterval(timerInterval);
+                } else {
+                    const minutes = Math.floor(remaining / 60000);
+                    const seconds = Math.floor((remaining % 60000) / 1000);
+                    document.getElementById('timer').textContent = 
+                        `Time remaining: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    if (remaining < 120000) { // Less than 2 minutes
+                        document.getElementById('timer').style.color = '#ff9800';
+                    }
+                }
+            }, 1000);
+        }
+        
+        async function processManually() {
+            if (!currentOrderId) {
+                alert('Please create an order first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/process-manual.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({order_id: currentOrderId})
+                });
+                
+                const result = await response.json();
+                document.getElementById('manualResult').textContent = 
+                    JSON.stringify(result, null, 2);
+                
+                if (result.success) {
+                    clearInterval(timerInterval);
+                    document.getElementById('timer').textContent = 'Processed manually!';
+                    document.getElementById('timer').style.color = '#4CAF50';
+                }
+            } catch (error) {
+                document.getElementById('manualResult').textContent = 
+                    'Error: ' + error.message;
+            }
+        }
+        
+        async function checkStatus() {
+            if (!currentOrderId) {
+                alert('Please create an order first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/check-order-status.php?id=' + currentOrderId);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const order = result.order;
+                    document.getElementById('statusResult').textContent = 
+                        'Order ID: ' + order.order_id + '\n' +
+                        'Status: ' + order.status + '\n' +
+                        'Provider: ' + (order.provider || 'Not set') + '\n' +
+                        'Created: ' + order.created_at + '\n' +
+                        'Completed: ' + (order.completed_at || 'Not yet');
+                } else {
+                    document.getElementById('statusResult').textContent = 
+                        'Error: ' + result.message;
+                }
+            } catch (error) {
+                document.getElementById('statusResult').textContent = 
+                    'Error: ' + error.message;
+            }
+        }
+        
+        async function forceAutoProcess() {
+            if (!currentOrderId) {
+                alert('Please create an order first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/process-automatic.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        order_id: currentOrderId,
+                        action: 'auto_process'
+                    })
+                });
+                
+                const result = await response.json();
+                document.getElementById('autoResult').textContent = 
+                    JSON.stringify(result, null, 2);
+                
+                if (result.success) {
+                    clearInterval(timerInterval);
+                    document.getElementById('timer').textContent = 'Processed automatically!';
+                    document.getElementById('timer').style.color = '#2196F3';
+                }
+            } catch (error) {
+                document.getElementById('autoResult').textContent = 
+                    'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

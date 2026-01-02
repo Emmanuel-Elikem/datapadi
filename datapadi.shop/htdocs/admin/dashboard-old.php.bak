@@ -1,0 +1,299 @@
+<?php
+session_start();
+// Use a robust path for including files from a subdirectory.
+require_once __DIR__ . '/../config/database.php';
+
+// Authentication Check: Ensure only logged-in admins can access this page.
+if (!isset($_SESSION['admin_logged_in'])) {
+    header('Location: login.php');
+    exit;
+}
+
+$db = new Database();
+
+// --- AJAX ACTION HANDLER ---
+// This block handles background requests from the JavaScript on this page.
+if (isset($_GET['action'])) {
+    header('Content-Type: application/json');
+    $response = ['success' => false, 'message' => 'An unknown error occurred.'];
+
+    try {
+        switch ($_GET['action']) {
+            // Toggles the site between 'active' and 'maintenance' (hard offline).
+            case 'toggle_maintenance':
+                $stmt = $db->prepare("UPDATE admin_settings SET setting_value = CASE WHEN setting_value = 'active' THEN 'maintenance' ELSE 'active' END WHERE setting_key = 'site_status'");
+                if ($stmt->execute()) {
+                    $response['success'] = true;
+                }
+                break;
+
+            // Sets the operating status to 'auto', 'open', or 'closed'.
+            case 'set_operating_status':
+                $new_status = $_POST['status'] ?? 'auto';
+                if (in_array($new_status, ['auto', 'open', 'closed'])) {
+                    $stmt = $db->prepare("INSERT INTO admin_settings (setting_key, setting_value) VALUES ('site_operating_status', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+                    if ($stmt->execute([$new_status])) {
+                        $response['success'] = true;
+                    }
+                }
+                break;
+
+            // Updates the system-wide announcement message.
+            case 'update_announcement':
+                $announcement = $_POST['announcement'] ?? '';
+                $stmt = $db->prepare("UPDATE admin_settings SET setting_value = ? WHERE setting_key = 'announcement'");
+                if ($stmt->execute([$announcement])) {
+                    if (!empty($announcement)) {
+                        notifyAffectedCustomers($db, $announcement);
+                    }
+                    $response['success'] = true;
+                }
+                break;
+        }
+    } catch (Exception $e) {
+        error_log("Admin Dashboard AJAX Error: " . $e->getMessage());
+        $response['message'] = 'Database operation failed.';
+    }
+    
+    echo json_encode($response);
+    exit;
+}
+// --- END OF AJAX HANDLER ---
+
+
+/**
+ * Fetches key statistics for the dashboard display.
+ */
+function getDashboardStats($db) {
+    $stats = [];
+    $today = date('Y-m-d');
+    
+    $stmt_today = $db->prepare("SELECT COUNT(*) as count, SUM(selling_price * quantity) as revenue, SUM(profit * quantity) as profit FROM orders WHERE DATE(created_at) = ?");
+    $stmt_today->execute([$today]);
+    $todayData = $stmt_today->fetch(PDO::FETCH_ASSOC);
+    $stats['today_orders'] = $todayData['count'] ?? 0;
+    $stats['today_revenue'] = $todayData['revenue'] ?? 0;
+    $stats['today_profit'] = $todayData['profit'] ?? 0;
+    
+    $stmt_pending = $db->prepare("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'");
+    $stmt_pending->execute();
+    $stats['pending_orders'] = $stmt_pending->fetchColumn() ?? 0;
+    
+    return $stats;
+}
+
+/**
+ * Creates notification entries for all customers with pending or processing orders.
+ */
+function notifyAffectedCustomers($db, $message) {
+    $stmt = $db->prepare("SELECT DISTINCT order_id FROM orders WHERE status IN ('pending', 'processing')");
+    $stmt->execute();
+    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    foreach ($orders as $order) {
+        $stmt_insert = $db->prepare("
+            INSERT INTO customer_notifications (order_id, type, message, created_at) 
+            VALUES (?, 'announcement', ?, NOW()) 
+            ON DUPLICATE KEY UPDATE message = VALUES(message), created_at = NOW()
+        ");
+        $stmt_insert->execute([$order['order_id'], $message]);
+    }
+}
+
+// Fetch all settings needed to render the page.
+$stmt = $db->prepare("SELECT setting_key, setting_value FROM admin_settings");
+$stmt->execute();
+$settings_raw = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+$settings = [
+    'site_status'           => $settings_raw['site_status'] ?? 'active',
+    'site_operating_status' => $settings_raw['site_operating_status'] ?? 'auto',
+    'announcement'          => $settings_raw['announcement'] ?? ''
+];
+
+// Fetch the dashboard statistics.
+$stats = getDashboardStats($db);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataPadi Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { --primary: #6366f1; --success: #10b981; --warning: #f59e0b; --error: #ef4444; --dark: #1f2937; --light: #f9fafb; }
+        body { font-family: 'Inter', sans-serif; background: var(--light); margin: 0; color: #374151; }
+        .dashboard-container { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+        .sidebar { background: var(--dark); color: white; padding: 2rem 0; }
+        .sidebar-header { padding: 0 1.5rem 2rem; border-bottom: 1px solid #374151; }
+        .sidebar-logo { font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+        .sidebar-menu { padding: 1rem 0; list-style: none; margin:0; }
+        .menu-item a { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem; color: #d1d5db; text-decoration: none; transition: all 0.3s; border-left: 3px solid transparent; }
+        .menu-item a:hover { background: #374151; color: white; }
+        .menu-item.active a { color: white; font-weight: 600; border-left-color: var(--primary); }
+        .main-content { padding: 2rem; }
+        .header-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .control-group { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .control-info { display: flex; align-items: center; gap: 1rem; }
+        .status-indicator { width: 12px; height: 12px; border-radius: 50%; animation: pulse 2s infinite; }
+        .status-indicator.active, .status-indicator.open, .status-indicator.auto { background: var(--success); }
+        .status-indicator.maintenance, .status-indicator.closed { background: var(--error); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .toggle-btn { padding: 0.5rem 1rem; border: none; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .btn-group button { border-radius: 0; }
+        .btn-group button:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+        .btn-group button:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+        .btn-group button.active { background: var(--primary); color: white; }
+        .btn-group button:not(.active) { background: #e5e7eb; color: #374151; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .stat-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .stat-title { font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem; display: block; }
+        .stat-value { font-size: 2.25rem; font-weight: 700; color: var(--dark); }
+        .announcement-box { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .announcement-box h3 { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 1.25rem; }
+        .announcement-box p { font-size: 0.875rem; color: #6b7280; margin-bottom: 1rem; }
+        .announcement-box textarea { width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; }
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .btn-primary { background: var(--primary); color: white; margin-top: 1rem; }
+        .btn-primary:hover { background: var(--primary-dark); }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header"><div class="sidebar-logo"><i class="fas fa-bolt"></i> DataPadi Admin</div></div>
+            <ul class="sidebar-menu">
+                <li class="menu-item active"><a href="dashboard.php"><i class="fas fa-home fa-fw"></i> Dashboard</a></li>
+                <li class="menu-item"><a href="pending-orders.php"><i class="fas fa-clock fa-fw"></i> Pending Orders</a></li>
+                <li class="menu-item"><a href="package-manager.php"><i class="fas fa-box fa-fw"></i> Package Manager</a></li>
+                <li class="menu-item"><a href="profit-report.php"><i class="fas fa-chart-line fa-fw"></i> Profit Report</a></li>
+                <li class="menu-item"><a href="customer-notifications.php"><i class="fas fa-bell fa-fw"></i> Notifications</a></li>
+                <li class="menu-item"><a href="site-hours.php"><i class="fas fa-calendar-alt fa-fw"></i> Site Hours</a></li>
+                <li class="menu-item"><a href="settings.php"><i class="fas fa-cog fa-fw"></i> Settings</a></li>
+                <li class="menu-item"><a href="logout.php"><i class="fas fa-sign-out-alt fa-fw"></i> Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="header-controls">
+                <!-- Maintenance Mode Toggle -->
+                <div class="control-group">
+                    <div class="control-info">
+                        <span class="status-indicator <?= htmlspecialchars($settings['site_status']) ?>"></span>
+                        <div>
+                            <div>Site Status: <strong><?= ucfirst(htmlspecialchars($settings['site_status'])) ?></strong></div>
+                            <small>Puts site completely offline.</small>
+                        </div>
+                    </div>
+                    <button class="toggle-btn" id="maintenanceBtn" style="background: <?= $settings['site_status'] === 'active' ? 'var(--error)' : 'var(--success)' ?>; color: white;">
+                        <?= $settings['site_status'] === 'active' ? 'Enter Maintenance' : 'Go Live' ?>
+                    </button>
+                </div>
+                
+                <!-- Operating Status Toggle (Smarter Version) -->
+                <div class="control-group">
+                    <div class="control-info">
+                        <span class="status-indicator <?= htmlspecialchars($settings['site_operating_status']) ?>"></span>
+                         <div>
+                            <div>Operating Status: <strong><?= ucfirst(htmlspecialchars($settings['site_operating_status'])) ?></strong></div>
+                            <small>Overrides delivery schedule.</small>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="toggle-btn <?= $settings['site_operating_status'] === 'open' ? 'active' : '' ?>" onclick="setOperatingStatus('open')">Force Open</button>
+                        <button class="toggle-btn <?= $settings['site_operating_status'] === 'auto' ? 'active' : '' ?>" onclick="setOperatingStatus('auto')">Auto</button>
+                        <button class="toggle-btn <?= $settings['site_operating_status'] === 'closed' ? 'active' : '' ?>" onclick="setOperatingStatus('closed')">Force Close</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-title">Today's Orders</span>
+                    <div class="stat-value"><?= htmlspecialchars($stats['today_orders']) ?></div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-title">Today's Revenue</span>
+                    <div class="stat-value">GHS <?= number_format($stats['today_revenue'], 2) ?></div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-title">Today's Profit</span>
+                    <div class="stat-value">GHS <?= number_format($stats['today_profit'], 2) ?></div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-title">Pending Orders</span>
+                    <div class="stat-value"><?= htmlspecialchars($stats['pending_orders']) ?></div>
+                </div>
+            </div>
+
+            <div class="announcement-box">
+                <h3><i class="fas fa-bullhorn"></i> System Announcement</h3>
+                <p>Visible to customers with pending/processing orders on the tracking page.</p>
+                <textarea id="announcement" placeholder="e.g., 'We are experiencing a temporary network delay with MTN.'"><?= htmlspecialchars($settings['announcement']) ?></textarea>
+                <button class="btn btn-primary" onclick="updateAnnouncement()"><i class="fas fa-paper-plane"></i> Broadcast</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Maintenance Toggle
+        document.getElementById('maintenanceBtn').addEventListener('click', async () => {
+            const confirmMessage = 'This will take the entire site offline (or bring it back online). Are you sure?';
+            if (!confirm(confirmMessage)) return;
+            try {
+                const response = await fetch('?action=toggle_maintenance', { method: 'POST' });
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Action failed. Please try again.');
+                }
+            } catch (error) {
+                alert('An error occurred.');
+            }
+        });
+
+        // New, Smarter Operating Status Toggle Function
+        async function setOperatingStatus(status) {
+            const messages = {
+                'open': 'This will FORCE the site to be operational, ignoring the schedule. Are you sure?',
+                'auto': 'This will make the site follow the AUTOMATIC schedule you set in Site Hours. Are you sure?',
+                'closed': 'This will FORCE the site into "after-hours" mode, ignoring the schedule. Are you sure?'
+            };
+            if (!confirm(messages[status])) return;
+
+            const formData = new FormData();
+            formData.append('status', status);
+
+            try {
+                const response = await fetch('?action=set_operating_status', { method: 'POST', body: formData });
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Failed to update status.');
+                }
+            } catch (error) {
+                alert('An error occurred.');
+            }
+        }
+
+        // Announcement Function
+        async function updateAnnouncement() {
+            const announcement = document.getElementById('announcement').value;
+            const formData = new FormData();
+            formData.append('announcement', announcement);
+            
+            try {
+                const response = await fetch('?action=update_announcement', { method: 'POST', body: formData });
+                if (response.ok) {
+                    alert('Announcement broadcasted successfully!');
+                } else {
+                    alert('Failed to broadcast announcement.');
+                }
+            } catch (error) {
+                alert('An error occurred while broadcasting.');
+            }
+        }
+    </script>
+</body>
+</html>

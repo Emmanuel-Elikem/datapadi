@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Complete Flow Monitor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .monitor-box {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-processing { background: #cce5ff; color: #004085; }
+        .status-completed { background: #d4edda; color: #155724; }
+        .status-failed { background: #f8d7da; color: #721c24; }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .btn-warning { background: #ffc107; color: black; }
+        .btn-warning:hover { background: #e0a800; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th { background: #f8f9fa; }
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Complete Order Flow Monitor</h1>
+    
+    <div class="monitor-box">
+        <h2>Step 1: Create New Test Order</h2>
+        <button onclick="createTestOrder()">Create Test Order</button>
+        <div id="orderInfo" style="margin-top: 10px;"></div>
+    </div>
+    
+    <div class="monitor-box">
+        <h2>Step 2: Manual Processing Window</h2>
+        <div class="timer" id="timer">No active order</div>
+        <button onclick="processManually()" class="btn-warning" disabled id="manualBtn">
+            Process Manually (Higher Profit)
+        </button>
+        <div id="manualResult"></div>
+    </div>
+    
+    <div class="monitor-box">
+        <h2>Step 3: Live Order Status</h2>
+        <button onclick="refreshStatus()">Refresh Status</button>
+        <button onclick="forceAutoProcess()" disabled id="forceBtn">Force Auto Process (Test)</button>
+        <table id="statusTable">
+            <tr>
+                <th>Property</th>
+                <th>Value</th>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="monitor-box">
+        <h2>Step 4: Make.com Execution</h2>
+        <p>Check your Make.com scenario execution history for:</p>
+        <ul>
+            <li>Webhook received</li>
+            <li>Router decision (wait or immediate)</li>
+            <li>HTTP request to process-automatic.php</li>
+        </ul>
+        <a href="https://eu2.make.com/org/YOUR_ORG/scenarios" target="_blank">
+            Open Make.com Dashboard →
+        </a>
+    </div>
+    
+    <div class="monitor-box">
+        <h2>All Test Orders</h2>
+        <button onclick="loadAllOrders()">Load All Orders</button>
+        <div id="allOrders"></div>
+    </div>
+
+    <script>
+        let currentOrderId = null;
+        let timerInterval = null;
+        let orderCreatedTime = null;
+        
+        async function createTestOrder() {
+            const orderData = {
+                network: 'mtn',
+                package_size: '1 GB',
+                selling_price: 5.90,
+                quantity: 1,
+                phone: '024' + Math.floor(Math.random() * 10000000).toString().padStart(7, '0'),
+                email: 'test@example.com',
+                payment_ref: 'TEST-' + Date.now(),
+                device_fingerprint: 'test-monitor-' + Date.now()
+            };
+            
+            try {
+                const response = await fetch('/api/process-order.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentOrderId = result.order_id;
+                    orderCreatedTime = Date.now();
+                    
+                    document.getElementById('orderInfo').innerHTML = `
+                        <div style="background: #d4edda; padding: 10px; border-radius: 5px;">
+                            ✅ Order Created Successfully!<br>
+                            <strong>Order ID:</strong> ${result.order_id}<br>
+                            <strong>Phone:</strong> ${orderData.phone}<br>
+                            <strong>Package:</strong> ${orderData.network.toUpperCase()} ${orderData.package_size}<br>
+                            <strong>Status:</strong> <span class="status-badge status-pending">PENDING</span>
+                        </div>
+                    `;
+                    
+                    // Enable buttons
+                    document.getElementById('manualBtn').disabled = false;
+                    document.getElementById('forceBtn').disabled = false;
+                    
+                    // Start timer
+                    startTimer();
+                    
+                    // Auto-refresh status
+                    refreshStatus();
+                    setInterval(refreshStatus, 5000); // Every 5 seconds
+                } else {
+                    document.getElementById('orderInfo').innerHTML = 
+                        `<div style="background: #f8d7da; padding: 10px; border-radius: 5px;">
+                            ❌ Error: ${result.message}
+                        </div>`;
+                }
+            } catch (error) {
+                document.getElementById('orderInfo').innerHTML = 
+                    `<div style="background: #f8d7da; padding: 10px; border-radius: 5px;">
+                        ❌ Error: ${error.message}
+                    </div>`;
+            }
+        }
+        
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            timerInterval = setInterval(() => {
+                const elapsed = Date.now() - orderCreatedTime;
+                const remaining = 600000 - elapsed; // 10 minutes
+                
+                if (remaining <= 0) {
+                    document.getElementById('timer').innerHTML = 
+                        `<div style="color: #dc3545;">⏰ Manual window expired!</div>
+                         <div style="font-size: 14px;">Order should auto-process any moment...</div>`;
+                    document.getElementById('manualBtn').disabled = true;
+                    clearInterval(timerInterval);
+                } else {
+                    const minutes = Math.floor(remaining / 60000);
+                    const seconds = Math.floor((remaining % 60000) / 1000);
+                    
+                    let color = '#28a745';
+                    if (remaining < 120000) color = '#ffc107';
+                    if (remaining < 60000) color = '#dc3545';
+                    
+                    document.getElementById('timer').innerHTML = 
+                        `<div style="color: ${color};">
+                            ${minutes}:${seconds.toString().padStart(2, '0')}
+                        </div>
+                        <div style="font-size: 14px;">Time to process manually for higher profit</div>`;
+                }
+            }, 1000);
+        }
+        
+        async function refreshStatus() {
+            if (!currentOrderId) return;
+            
+            try {
+                const response = await fetch(`/api/check-order-status.php?id=${currentOrderId}`);
+                const result = await response.json();
+                
+                if (result.success && result.order) {
+                    const order = result.order;
+                    const statusClass = `status-${order.status}`;
+                    
+                    document.getElementById('statusTable').innerHTML = `
+                        <tr><th>Property</th><th>Value</th></tr>
+                        <tr><td>Order ID</td><td>${order.order_id}</td></tr>
+                        <tr><td>Status</td><td><span class="status-badge ${statusClass}">${order.status.toUpperCase()}</span></td></tr>
+                        <tr><td>Provider</td><td>${order.provider || 'Not set'}</td></tr>
+                        <tr><td>Network</td><td>${order.network}</td></tr>
+                        <tr><td>Package</td><td>${order.package_size}</td></tr>
+                        <tr><td>Created</td><td>${new Date(order.created_at).toLocaleString()}</td></tr>
+                        <tr><td>Completed</td><td>${order.completed_at ? new Date(order.completed_at).toLocaleString() : 'Not yet'}</td></tr>
+                    `;
+                    
+                    // If status changed from pending, stop timer
+                    if (order.status !== 'pending') {
+                        clearInterval(timerInterval);
+                        if (order.status === 'processing' || order.status === 'completed') {
+                            document.getElementById('timer').innerHTML = 
+                                `<div style="color: #28a745;">✅ Order ${order.status}!</div>
+                                 <div style="font-size: 14px;">Provider: ${order.provider}</div>`;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error refreshing status:', error);
+            }
+        }
+        
+        async function processManually() {
+            if (!currentOrderId) {
+                alert('No active order');
+                return;
+            }
+            
+            if (!confirm('Process this order manually for higher profit?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/process-manual.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({order_id: currentOrderId})
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('manualResult').innerHTML = 
+                        `<div style="background: #d4edda; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                            ✅ Order marked for manual processing!<br>
+                            Now complete the purchase on your cheaper provider's website.
+                        </div>`;
+                    clearInterval(timerInterval);
+                    refreshStatus();
+                } else {
+                    document.getElementById('manualResult').innerHTML = 
+                        `<div style="background: #f8d7da; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                            ❌ Error: ${result.message}
+                        </div>`;
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function forceAutoProcess() {
+            if (!currentOrderId) {
+                alert('No active order');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/process-automatic.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        order_id: currentOrderId,
+                        action: 'auto_process'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                alert(result.success ? 
+                    '✅ Order processed via API!' : 
+                    `❌ ${result.message}`
+                );
+                
+                refreshStatus();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function loadAllOrders() {
+            try {
+                const response = await fetch('/api/admin/dashboard.php');
+                const data = await response.json();
+                
+                if (data.recent_orders) {
+                    let html = '<table style="width: 100%; margin-top: 10px;">';
+                    html += '<tr><th>Order ID</th><th>Status</th><th>Provider</th><th>Created</th><th>Profit</th></tr>';
+                    
+                    data.recent_orders.forEach(order => {
+                        const statusClass = `status-${order.status}`;
+                        html += `<tr>
+                            <td>${order.order_id}</td>
+                            <td><span class="status-badge ${statusClass}">${order.status}</span></td>
+                            <td>${order.provider || '-'}</td>
+                            <td>${new Date(order.created_at).toLocaleTimeString()}</td>
+                            <td>GHS ${order.profit || '0.00'}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</table>';
+                    document.getElementById('allOrders').innerHTML = html;
+                } else {
+                    document.getElementById('allOrders').innerHTML = 'No orders found or not logged in as admin.';
+                }
+            } catch (error) {
+                document.getElementById('allOrders').innerHTML = 'Error loading orders: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

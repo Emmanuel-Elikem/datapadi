@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AFA Bundle Coming Soon | DataPadi</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #2EC4B6; /* Modern teal color */
+      --background-image: linear-gradient(135deg, #2EC4B6 0%, #1A936F 100%);
+      --text-color: #ffffff;
+      --container-bg: rgba(255, 255, 255, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: var(--background-image);
+      color: var(--text-color);
+      padding: 2rem;
+      animation: fadeIn 0.6s ease;
+    }
+
+    .main-container {
+      position: relative;
+      background: var(--container-bg);
+      backdrop-filter: blur(20px);
+      border-radius: 2.5rem;
+      padding: 3rem;
+      max-width: 680px;
+      width: 100%;
+      box-shadow: 0 1rem 3rem rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.1);
+      text-align: center;
+    }
+
+    .icon-container {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .icon-container i {
+      font-size: 3.5rem;
+      color: var(--text-color);
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      font-weight: 700;
+    }
+
+    .status-message {
+      font-size: 1.2rem;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    .progress-container {
+      width: 80%;
+      height: 8px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 4px;
+      margin: 2rem auto;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: var(--text-color);
+      border-radius: 4px;
+      transition: width 25s ease;
+    }
+
+    .features-list {
+      display: grid;
+      gap: 1rem;
+      margin: 2rem 0;
+      text-align: left;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: rgba(255,255,255,0.1);
+      border-radius: 1rem;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 768px) {
+      .main-container {
+        padding: 2rem 1.5rem;
+      }
+      
+      h1 {
+        font-size: 2rem;
+      }
+      
+      .icon-container {
+        width: 100px;
+        height: 100px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="main-container">
+    <div class="icon-container">
+      <i class="fas fa-rocket"></i>
+    </div>
+
+    <h1>AFA Bundle Launching Soon</h1>
+    
+    <p class="status-message">
+      We're putting the final touches on an exciting new offering! The AFA Bundle is currently in development and will revolutionize your calling experience. Stay tuned for groundbreaking features and exclusive benefits.
+    </p>
+
+    <div class="progress-container">
+      <div class="progress-bar"></div>
+    </div>
+
+    <div class="features-list">
+      <div class="feature-item">
+        <i class="fas fa-bolt"></i>
+        <span>Lightning-fast connectivity</span>
+      </div>
+      <div class="feature-item">
+        <i class="fas fa-infinity"></i>
+        <span>Unmatched value packages</span>
+      </div>
+      <div class="feature-item">
+        <i class="fas fa-shield-alt"></i>
+        <span>Enhanced security features</span>
+      </div>
+    </div>
+
+    <div class="action-buttons">
+      <a href="index.html" class="action-btn home-btn"> 
+        <i class="fas fa-arrow-left"></i> Back to Home
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Animate progress bar
+    document.addEventListener('DOMContentLoaded', () => {
+      const progressBar = document.querySelector('.progress-bar');
+      setTimeout(() => {
+        progressBar.style.width = '95%';
+      }, 500);
+    });
+  </script>
+</body>
+</html>

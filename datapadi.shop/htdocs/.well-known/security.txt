@@ -1,0 +1,8 @@
+Contact: mailto:support@datapadi.shop
+Expires: 2026-12-31T23:59:59.000Z
+Preferred-Languages: en
+Canonical: https://datapadi.shop/.well-known/security.txt
+
+# DataPadi - Legitimate Data Bundle Service
+# This is NOT a phishing or malware site
+# Service: Mobile data bundle sales for Ghana networks (MTN, AirtelTigo, Telecel)
